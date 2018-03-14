@@ -4,7 +4,6 @@ import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.sql.SparkSession
 
 case class DataRow(name: String, value: Integer)
-case class Person(name: String, age: Long)
 
 object App extends App {
 
@@ -58,8 +57,8 @@ object App extends App {
     val sc = new SparkContext(sparkConf)
     // split each document into words
     //val tokenized = sc.textFile("hdfs://quickstart.cloudera:8020/user/root/words.txt").flatMap(_.split("\\W+"))
-    //val tokenized = sc.textFile("src/main/resources/words.txt").flatMap(_.split("\\W+"))
-    val tokenized = sc.textFile(filePath).flatMap(_.split("\\W+"))
+    val tokenized = sc.textFile("src/main/resources/words.txt").flatMap(_.split("\\W+"))
+    //val tokenized = sc.textFile(filePath).flatMap(_.split("\\W+"))
 
     // count the occurrence of each word
     val wordCounts = tokenized.map((_, 1)).reduceByKey(_ + _)
