@@ -1,5 +1,3 @@
-package main.scala
-
 import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.sql.SparkSession
 
@@ -8,7 +6,7 @@ case class DataRow(name: String, value: Integer)
 object App extends App {
 
   val sparkConf = new SparkConf()
-  sparkConf.setMaster("local")
+  sparkConf.setMaster("local[*]")
   sparkConf.setAppName("Testing")
 
   var spark: SparkSession = SparkSession.builder().config(sparkConf).getOrCreate()
@@ -17,6 +15,9 @@ object App extends App {
 
   doThingsWithDataframes()
   doThingsWithDataSets()
+  val databaseTests = new Database()
+  databaseTests.testKudu()
+  databaseTests.testMongo()
   doWordCount()
 
   def doThingsWithDataSets():Unit = {
@@ -55,10 +56,11 @@ object App extends App {
     spark.close()
     spark2.close()
     val sc = new SparkContext(sparkConf)
+
     // split each document into words
     //val tokenized = sc.textFile("hdfs://quickstart.cloudera:8020/user/root/words.txt").flatMap(_.split("\\W+"))
-    val tokenized = sc.textFile("src/main/resources/words.txt").flatMap(_.split("\\W+"))
-    //val tokenized = sc.textFile(filePath).flatMap(_.split("\\W+"))
+    //val tokenized = sc.textFile("src/main/resources/words.txt").flatMap(_.split("\\W+"))
+    val tokenized = sc.textFile(filePath).flatMap(_.split("\\W+"))
 
     // count the occurrence of each word
     val wordCounts = tokenized.map((_, 1)).reduceByKey(_ + _)
