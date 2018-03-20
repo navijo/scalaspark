@@ -6,7 +6,7 @@ case class DataRow(name: String, value: Integer)
 object App extends App {
 
   val sparkConf = new SparkConf()
-  sparkConf.setMaster("local[*]")
+  sparkConf.setMaster("local[1]")
   sparkConf.setAppName("Testing")
 
   var spark: SparkSession = SparkSession.builder().config(sparkConf).getOrCreate()
@@ -19,6 +19,8 @@ object App extends App {
   databaseTests.testKudu()
   databaseTests.testMongo()
   doWordCount()
+  spark2.stop()
+  spark2.close()
 
   def doThingsWithDataSets():Unit = {
     System.out.println("\n\nDoing Things with Datasets\n")
@@ -73,7 +75,7 @@ object App extends App {
 
     // count characters
     val chars = wordCounts.flatMap(_._1.toCharArray)
-    val charCount = chars.map((_, 1)).reduceByKey(_ + _)
+    val charCount = chars.map((_, 1)).reduceByKey(_ + _).sortByKey(ascending = true)
 
     System.out.println("Total Words: "+tokenized.count() +"\n" +wordCounts.collect().mkString(", "))
     System.out.println("Total Chars: "+charFromWords +"\n"+charCount.collect().mkString("\n"))

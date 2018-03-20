@@ -23,16 +23,14 @@ class Database{
     for(doc <- allDocs) println( doc )
     coll.remove(a);
     coll.remove(b);
+    mongoClient.close();
     System.out.println("\n\nEnd Testing MongoDB\n")
   }
 
   def testKudu() = {
     System.out.println("\n\nTesting Kudu\n")
 
-    var spark: SparkSession = SparkSession.builder().getOrCreate()
-    val spark2 = spark
-
-    val sqlContext = spark2
+    val sqlContext = SparkSession.builder().getOrCreate().sqlContext
 
     // Read a table from Kudu
     val df = sqlContext.read.options(Map("kudu.master" -> "kudu.master:7051", "kudu.table" -> "impala::default.sfmta")).kudu
@@ -86,7 +84,7 @@ class Database{
 
     val updatedDF = sqlContext.read.options(Map("kudu.master" -> "kudu.master:7051", "kudu.table" -> "test_table")).kudu
 
-    System.out.println("\n\nUpdated Values:\n")
+   /* System.out.println("\n\nUpdated Values:\n")
     for(valueBig<-updatedDF.collect()){
       for(valueSmall <- tenUpdated){
         if(valueBig.getLong(0) == valueSmall.getLong(0)
@@ -94,7 +92,7 @@ class Database{
           System.out.println(valueSmall)
         }
       }
-    }
+    }*/
 
 
     // Data can also be inserted into the Kudu table using the data source, though the methods on KuduContext are preferred
