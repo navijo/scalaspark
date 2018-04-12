@@ -126,6 +126,7 @@ class Database {
         println("Creating the schema")
         val columnList = new java.util.ArrayList[ColumnSchema]()
         columnList.add(new ColumnSchemaBuilder("KEY_ID", Type.INT32).key(true).build())
+        columnList.add(new ColumnSchemaBuilder("COL_D", Type.INT32).key(true).build())
         columnList.add(new ColumnSchemaBuilder("COL_A", Type.STRING).key(false).build())
         columnList.add(new ColumnSchemaBuilder("COL_B", Type.STRING).key(false).build())
         columnList.add(new ColumnSchemaBuilder("COL_C", Type.STRING).key(false).build())
@@ -134,6 +135,9 @@ class Database {
 
         val rangeKeys: java.util.List[String] = new java.util.ArrayList[String]()
         rangeKeys.add("KEY_ID")
+
+        val hashKeys: java.util.List[String] = new java.util.ArrayList[String]()
+        hashKeys.add("COL_D")
 
 
         if (kuduClient.tableExists(tableName)) {
@@ -149,23 +153,23 @@ class Database {
         rightBoundRow.addInt(0, 2)
 
         kuduClient.createTable(tableName, schema,
-          new CreateTableOptions().setRangePartitionColumns(rangeKeys).addRangePartition(leftBoundRow, rightBoundRow))
-        //kuduClient.createTable(tableName, schema, new CreateTableOptions().setRangePartitionColumns)
+          new CreateTableOptions().
+            setRangePartitionColumns(rangeKeys).addRangePartition(leftBoundRow, rightBoundRow).
+            addHashPartitions(hashKeys, 2))
+
 
         for (x <- 2 until 10 by 2) {
-          println("Creating the partitions between " + x + " and " + (x + 2))
+          println("Creating the range partitions between " + x + " and " + (x + 2))
           val leftBoundRow: PartialRow = new PartialRow(schema)
           leftBoundRow.addInt(0, x)
           val rightBoundRow: PartialRow = new PartialRow(schema)
           rightBoundRow.addInt(0, x + 2)
           kuduClient.alterTable(tableName, new AlterTableOptions().addRangePartition(leftBoundRow, rightBoundRow))
-
         }
 
 
         val table = kuduClient.openTable(tableName)
         val session = kuduClient.newSession
-
 
         println("Inserting 10 registers")
         for (x <- 0 until 10 by 1) {
@@ -175,18 +179,19 @@ class Database {
           val row: PartialRow = insert.getRow
 
           row.addInt(0, x)
-          row.addString(1, "value_1_" + x)
-          row.addString(2, "value_2_" + x)
+          row.addString(2, "value_1_" + x)
           row.addString(3, "value_2_" + x)
+          row.addString(4, "value_2_" + x)
+          if (x % 2 == 0) row.addInt(1, 0) else row.addInt(1, 1)
 
           session.apply(insert)
-
         }
 
 
         println("Scanning the table by key")
         val projectColumns = new java.util.ArrayList[String](4)
         projectColumns.add("KEY_ID")
+        projectColumns.add("COL_D")
         projectColumns.add("COL_A")
         projectColumns.add("COL_B")
         projectColumns.add("COL_C")
@@ -199,8 +204,9 @@ class Database {
           val results = scanner.nextRows
           while (results.hasNext) {
             val actualRow = results.next()
-            println(actualRow.getInt(0) + "\t" + actualRow.getString(1)
-              + "\t" + actualRow.getString(2) + "\t" + actualRow.getString(3))
+            println(actualRow.getInt(0) + "\t" + actualRow.getString(4)
+              + "\t" + actualRow.getInt(1) + "\t" + actualRow.getString(2)
+              + "\t" + actualRow.getString(3))
 
           }
         }
@@ -216,8 +222,9 @@ class Database {
           val results = predicateScanner.nextRows
           while (results.hasNext) {
             val actualRow = results.next()
-            println(actualRow.getInt(0) + "\t" + actualRow.getString(1)
-              + "\t" + actualRow.getString(2) + "\t" + actualRow.getString(3))
+            println(actualRow.getInt(0) + "\t" + actualRow.getString(4)
+              + "\t" + actualRow.getInt(1) + "\t" + actualRow.getString(2)
+              + "\t" + actualRow.getString(3))
           }
         }
 
