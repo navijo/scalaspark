@@ -6,6 +6,7 @@ import org.apache.kudu.spark.kudu._
 import org.apache.kudu.{ColumnSchema, Schema, Type}
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.functions._
+import org.joda.time.{DateTime, DateTimeZone}
 
 import scala.collection.JavaConverters._
 
@@ -114,8 +115,10 @@ class Database {
   def testKuduClient(): Unit = {
     val kuduMaster = "kudu.master"
 
-    //val tableName = "kuduclientSample-" + System.currentTimeMillis
     val tableName = "kuduclientSample"
+
+    val numRegistersToInsert = 100
+    val numRangePartitions = 5
 
     println(" -- Starting ")
     val kuduClient = new KuduClient.KuduClientBuilder(kuduMaster).build()
@@ -158,7 +161,8 @@ class Database {
             addHashPartitions(hashKeys, 2))
 
 
-        for (x <- 2 until 10 by 2) {
+        println("Creating the range partitions")
+        for (x <- 2 until numRangePartitions * 2 by 2) {
           println("Creating the range partitions between " + x + " and " + (x + 2))
           val leftBoundRow: PartialRow = new PartialRow(schema)
           leftBoundRow.addInt(0, x)
@@ -167,12 +171,18 @@ class Database {
           kuduClient.alterTable(tableName, new AlterTableOptions().addRangePartition(leftBoundRow, rightBoundRow))
         }
 
+        println("Creating the unbounded range partitions")
+        //If the row specifying the partition is empty, the partition will be unbounded
+        val rightUnbounded: PartialRow = new PartialRow(schema)
+        rightUnbounded.addInt(0, (numRangePartitions * 2) + 1)
+        kuduClient.alterTable(tableName, new AlterTableOptions().addRangePartition(rightUnbounded, new PartialRow(schema)))
 
         val table = kuduClient.openTable(tableName)
         val session = kuduClient.newSession
 
-        println("Inserting 10 registers")
-        for (x <- 0 until 10 by 1) {
+        println("Inserting " + numRegistersToInsert + " registers...")
+        val initTime = DateTime.now(DateTimeZone.UTC).getMillis
+        for (x <- 0 until numRegistersToInsert by 1) {
           println(x)
 
           val insert: Insert = table.newInsert
@@ -186,6 +196,10 @@ class Database {
 
           session.apply(insert)
         }
+
+        val endTime = DateTime.now(DateTimeZone.UTC).getMillis
+        val diffTime = endTime - initTime
+        println("Total time spent inserting:\t" + diffTime / 1000 + " seconds")
 
 
         println("Scanning the table by key")
@@ -204,9 +218,9 @@ class Database {
           val results = scanner.nextRows
           while (results.hasNext) {
             val actualRow = results.next()
-            println(actualRow.getInt(0) + "\t" + actualRow.getString(4)
-              + "\t" + actualRow.getInt(1) + "\t" + actualRow.getString(2)
-              + "\t" + actualRow.getString(3))
+            println(actualRow.getInt(0) + "\t" + actualRow.getInt(1)
+              + "\t" + actualRow.getString(2) + "\t" + actualRow.getString(3)
+              + "\t" + actualRow.getString(4))
 
           }
         }
@@ -214,23 +228,20 @@ class Database {
         println("Querying the table")
 
         val predicateScanner = kuduClient.newScannerBuilder(table).
-          addPredicate(KuduPredicate.newComparisonPredicate(new ColumnSchemaBuilder("COL_A", Type.STRING).build()
-            , ComparisonOp.EQUAL, "value_1_2")).build()
-
+          addPredicate(KuduPredicate.newComparisonPredicate(new ColumnSchemaBuilder("COL_D", Type.INT32).build()
+            , ComparisonOp.EQUAL, 1)).build()
 
         while (predicateScanner.hasMoreRows) {
           val results = predicateScanner.nextRows
           while (results.hasNext) {
             val actualRow = results.next()
-            println(actualRow.getInt(0) + "\t" + actualRow.getString(4)
-              + "\t" + actualRow.getInt(1) + "\t" + actualRow.getString(2)
-              + "\t" + actualRow.getString(3))
+            println(actualRow.getInt(0) + "\t" + actualRow.getInt(1)
+              + "\t" + actualRow.getString(2) + "\t" + actualRow.getString(3)
+              + "\t" + actualRow.getString(4))
           }
         }
 
       }
-
-
     } finally {
       kuduClient.shutdown()
     }
