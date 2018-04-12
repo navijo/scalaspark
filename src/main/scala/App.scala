@@ -1,28 +1,33 @@
-import org.apache.spark.{SparkConf, SparkContext}
+import org.apache.spark.SparkConf
 import org.apache.spark.sql.SparkSession
 
 case class DataRow(name: String, value: Integer)
 
 object App extends App {
 
+  System.setProperty("hadoop.home.dir", "D:\\hadoop")
+
   val sparkConf = new SparkConf()
-  sparkConf.setMaster("local[1]")
   sparkConf.setAppName("Testing")
+  sparkConf.setMaster("local[1]")
+
 
   var spark: SparkSession = SparkSession.builder().config(sparkConf).getOrCreate()
   val spark2 = spark
+
   import spark2.implicits._
+
+  val databaseTests = new Database()
 
   doThingsWithDataframes()
   doThingsWithDataSets()
-  val databaseTests = new Database()
-  databaseTests.testKudu()
-  databaseTests.testMongo()
   doWordCount()
-  spark2.stop()
-  spark2.close()
 
-  def doThingsWithDataSets():Unit = {
+  databaseTests.testKuduContext()
+  databaseTests.testMongo()
+  databaseTests.testKuduClient()
+
+  def doThingsWithDataSets(): Unit = {
     System.out.println("\n\nDoing Things with Datasets\n")
 
     val dades = Seq("a", "b", "c", "d") zip (0 to 4)
@@ -36,28 +41,27 @@ object App extends App {
     System.out.println("End of datasets things\n")
   }
 
-  def doThingsWithDataframes():Unit = {
+  def doThingsWithDataframes(): Unit = {
     System.out.println("\n\nDoing Things with DataFrames\n")
 
     val data = Seq("a", "b", "c", "d") zip (0 to 4)
 
     val df = spark2.createDataFrame(data)
 
-    val df2 = df.map(row => DataRow(row.getString(0),row.getInt(1)))
+    val df2 = df.map(row => DataRow(row.getString(0), row.getInt(1)))
     val df3 = df2.map(x => (x.name, x.value, x.value + 1))
 
     System.out.println("DataFrame:\t" + df3.collect().mkString(","))
     System.out.println("End of dataframes things\n")
   }
 
-  def doWordCount():Unit = {
+  def doWordCount(): Unit = {
     System.out.println("\nDoing WordCount")
 
     val conf = com.typesafe.config.ConfigFactory.load()
-    val filePath : String = conf.getString("files.path")
-    spark.close()
-    spark2.close()
-    val sc = new SparkContext(sparkConf)
+    val filePath: String = conf.getString("files.path")
+
+    val sc = SparkSession.builder().config(sparkConf).getOrCreate().sparkContext
 
     // split each document into words
     //val tokenized = sc.textFile("hdfs://quickstart.cloudera:8020/user/root/words.txt").flatMap(_.split("\\W+"))
@@ -66,6 +70,7 @@ object App extends App {
 
     // count the occurrence of each word
     val wordCounts = tokenized.map((_, 1)).reduceByKey(_ + _)
+    val wordCounts2 = tokenized.map((_, 1)).countByKey()
 
     // filter out words with less than threshold occurrences
     /*val threshold = 0
@@ -77,8 +82,10 @@ object App extends App {
     val chars = wordCounts.flatMap(_._1.toCharArray)
     val charCount = chars.map((_, 1)).reduceByKey(_ + _).sortByKey(ascending = true)
 
-    System.out.println("Total Words: "+tokenized.count() +"\n" +wordCounts.collect().mkString(", "))
-    System.out.println("Total Chars: "+charFromWords +"\n"+charCount.collect().mkString("\n"))
+
+    System.out.println("Total Words: " + tokenized.count() + "\n" + wordCounts.collect().mkString(", "))
+    System.out.println("Total Chars: " + charFromWords + "\n" + charCount.collect().mkString("\n"))
+    System.out.println("Total Chars2: " + charFromWords + "\n" + wordCounts2.mkString("\n"))
     System.out.println("End of WordCount\n\n")
   }
 }
