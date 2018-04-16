@@ -233,6 +233,29 @@ class Database(printOutput: Boolean) {
           }
         }
 
+
+        println("<------------------------------------------>")
+        println("|\t\tUpdating the table")
+
+        val predicateUpdateScanner = kuduClient.newScannerBuilder(table).
+          addPredicate(KuduPredicate.newComparisonPredicate(new ColumnSchemaBuilder("COL_D", Type.INT32).build()
+            , ComparisonOp.EQUAL, 1)).build()
+
+        while (predicateUpdateScanner.hasMoreRows) {
+          val results = predicateUpdateScanner.nextRows
+          while (results.hasNext) {
+            val actualRow = results.next()
+            val update: Update = table.newUpdate
+            update.getRow.addInt(0, actualRow.getInt(0))
+            update.getRow.addInt(1, actualRow.getInt(1))
+            update.getRow.addString(2, "Updated2")
+            update.getRow.addString(3, "Updated3")
+            update.getRow.addString(4, "Updated4")
+
+            session.apply(update)
+          }
+        }
+
         println("<------------------------------------------>")
         println("|\t\tQuerying the table")
 
