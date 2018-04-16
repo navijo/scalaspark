@@ -11,8 +11,7 @@ import org.joda.time.{DateTime, DateTimeZone}
 import scala.collection.JavaConverters._
 
 
-class Database {
-
+class Database(printOutput: Boolean) {
 
   def testMongo(): Unit = {
     System.out.println("\n\nTesting MongoDB\n")
@@ -34,35 +33,34 @@ class Database {
   }
 
   def testKuduContext(): Unit = {
-    System.out.println("\n\nTesting Kudu\n")
+    println("<---------------- Testing Kudu--------------->")
 
     val sqlContext = SparkSession.builder().getOrCreate().sqlContext
 
-    // Read a table from Kudu
-    val df = sqlContext.read.options(Map("kudu.master" -> "kudu.master:7051", "kudu.table" -> "impala::default.sfmta")).kudu
+    // Read a table from Kudu into a dataframe
+    val df = sqlContext.read.options(Map("kudu.master" -> "kudu.master:7051", "kudu.table" ->
+      "impala::default.sfmta")).kudu
 
     // Query using the Spark API...
     df.select("*").filter("speed >= 5").show()
 
-
     // ...or register a temporary table and use SQL
     df.createOrReplaceTempView("test_table")
+
     val filteredDF = df.select("report_time", "vehicle_tag").filter("speed >= 5")
 
-    // Use KuduContext to create, delete, or write to Kudu tables
     val kuduContext = new KuduContext("kudu.master:7051", sqlContext.sparkContext)
 
-    // Create a new Kudu table from a dataframe schema
-    // NB: No rows from the dataframe are inserted into the table
+    // Delete the table if exists
     if (kuduContext.tableExists("test_table")) {
       kuduContext.deleteTable("test_table")
     }
+
     kuduContext.createTable(
       "test_table", df.schema, Seq("report_time", "vehicle_tag"),
       new CreateTableOptions()
         .setNumReplicas(1)
         .addHashPartitions(List("report_time", "vehicle_tag").asJava, 3))
-
 
     // Insert data
     kuduContext.insertRows(df, "test_table")
@@ -74,59 +72,62 @@ class Database {
     kuduContext.upsertRows(df, "test_table")
 
     // Update data
-    System.out.println("\n\nOriginal Values:\n")
-    for (value <- df.take(10)) {
-      System.out.println(value)
+    if (printOutput) {
+      println("\n\nOriginal Values:")
+      for (value <- df.take(10)) {
+        println(value)
+      }
     }
 
     val alteredDF = df.withColumn("speed", col("speed") + 1)
+
     val tenUpdated = alteredDF.take(10)
-    System.out.println("\n\nChanged Values:\n")
-    for (value <- tenUpdated) {
-      System.out.println(value)
+    if (printOutput) {
+      println("\n\nChanged Values:")
+      for (value <- tenUpdated) {
+        println(value)
+      }
     }
 
     kuduContext.updateRows(alteredDF, "test_table")
 
     val updatedDF = sqlContext.read.options(Map("kudu.master" -> "kudu.master:7051", "kudu.table" -> "test_table")).kudu
 
-    /* System.out.println("\n\nUpdated Values:\n")
-     for(valueBig<-updatedDF.collect()){
-       for(valueSmall <- tenUpdated){
-         if(valueBig.getLong(0) == valueSmall.getLong(0)
-           && valueBig.getInt(1) == valueSmall.getInt(1)) {
-           System.out.println(valueSmall)
-         }
-       }
-     }*/
-
-
-    // Data can also be inserted into the Kudu table using the data source, though the methods on KuduContext are preferred
-    // NB: The default is to upsert rows; to perform standard inserts instead, set operation = insert in the options map
-    // NB: Only mode Append is supported
-    df.write.options(Map("kudu.master" -> "kudu.master:7051", "kudu.table" -> "test_table")).mode("append").kudu
-
+    if (printOutput) {
+      println("\nUpdated Values:")
+      for (valueBig <- updatedDF.collect()) {
+        for (valueSmall <- tenUpdated) {
+          if (valueBig.getLong(0) == valueSmall.getLong(0)
+            && valueBig.getInt(1) == valueSmall.getInt(1)) {
+            println(valueSmall)
+          }
+        }
+      }
+    }
 
     // Delete a Kudu table
     kuduContext.deleteTable("test_table")
-    System.out.println("\n\nEnd Testing Kudu\n")
+
+    println("\n\nEnd Testing Kudu")
+    println("<------------------------------------------>")
   }
 
   def testKuduClient(): Unit = {
+
     val kuduMaster = "kudu.master"
 
     val tableName = "kuduclientSample"
 
-    val numRegistersToInsert = 100
-    val numRangePartitions = 5
+    val numRegistersToInsert = 1000
+    val numRangePartitions = 10
 
-    println(" -- Starting ")
+    println("<---------------- Starting ----------------> ")
     val kuduClient = new KuduClient.KuduClientBuilder(kuduMaster).build()
 
     try {
       try {
-        println(" -- ")
-        println("Creating the schema")
+        println("<------------------------------------------>")
+        println("|\t\tCreating the schema")
         val columnList = new java.util.ArrayList[ColumnSchema]()
         columnList.add(new ColumnSchemaBuilder("KEY_ID", Type.INT32).key(true).build())
         columnList.add(new ColumnSchemaBuilder("COL_D", Type.INT32).key(true).build())
@@ -147,8 +148,8 @@ class Database {
           kuduClient.deleteTable(tableName)
         }
 
-
-        println("Creating the table")
+        println("<------------------------------------------>")
+        println("|\t\tCreating the table")
 
         val leftBoundRow: PartialRow = new PartialRow(schema)
         leftBoundRow.addInt(0, 0)
@@ -160,10 +161,12 @@ class Database {
             setRangePartitionColumns(rangeKeys).addRangePartition(leftBoundRow, rightBoundRow).
             addHashPartitions(hashKeys, 2))
 
-
-        println("Creating the range partitions")
+        println("<------------------------------------------>")
+        println("|\t\tCreating the range partitions")
         for (x <- 2 until numRangePartitions * 2 by 2) {
-          println("Creating the range partitions between " + x + " and " + (x + 2))
+          if (printOutput)
+            println("Creating the range partitions between " + x + " and " + (x + 2))
+
           val leftBoundRow: PartialRow = new PartialRow(schema)
           leftBoundRow.addInt(0, x)
           val rightBoundRow: PartialRow = new PartialRow(schema)
@@ -171,7 +174,9 @@ class Database {
           kuduClient.alterTable(tableName, new AlterTableOptions().addRangePartition(leftBoundRow, rightBoundRow))
         }
 
-        println("Creating the unbounded range partitions")
+        println("<------------------------------------------>")
+        println("|\tCreating the unbounded range partitions")
+
         //If the row specifying the partition is empty, the partition will be unbounded
         val rightUnbounded: PartialRow = new PartialRow(schema)
         rightUnbounded.addInt(0, (numRangePartitions * 2) + 1)
@@ -180,10 +185,12 @@ class Database {
         val table = kuduClient.openTable(tableName)
         val session = kuduClient.newSession
 
-        println("Inserting " + numRegistersToInsert + " registers...")
+        println("<------------------------------------------>")
+        println("|\t\tInserting " + numRegistersToInsert + " registers...")
         val initTime = DateTime.now(DateTimeZone.UTC).getMillis
         for (x <- 0 until numRegistersToInsert by 1) {
-          println(x)
+          if (printOutput)
+            println(x)
 
           val insert: Insert = table.newInsert
           val row: PartialRow = insert.getRow
@@ -199,10 +206,10 @@ class Database {
 
         val endTime = DateTime.now(DateTimeZone.UTC).getMillis
         val diffTime = endTime - initTime
-        println("Total time spent inserting:\t" + diffTime / 1000 + " seconds")
+        println("|\tTotal time spent inserting:\t" + diffTime / 1000 + " seconds")
 
-
-        println("Scanning the table by key")
+        println("<------------------------------------------>")
+        println("|\t\tScanning the table by key")
         val projectColumns = new java.util.ArrayList[String](4)
         projectColumns.add("KEY_ID")
         projectColumns.add("COL_D")
@@ -218,14 +225,16 @@ class Database {
           val results = scanner.nextRows
           while (results.hasNext) {
             val actualRow = results.next()
-            println(actualRow.getInt(0) + "\t" + actualRow.getInt(1)
-              + "\t" + actualRow.getString(2) + "\t" + actualRow.getString(3)
-              + "\t" + actualRow.getString(4))
+            if (printOutput)
+              println(actualRow.getInt(0) + "\t" + actualRow.getInt(1)
+                + "\t" + actualRow.getString(2) + "\t" + actualRow.getString(3)
+                + "\t" + actualRow.getString(4))
 
           }
         }
 
-        println("Querying the table")
+        println("<------------------------------------------>")
+        println("|\t\tQuerying the table")
 
         val predicateScanner = kuduClient.newScannerBuilder(table).
           addPredicate(KuduPredicate.newComparisonPredicate(new ColumnSchemaBuilder("COL_D", Type.INT32).build()
@@ -235,9 +244,10 @@ class Database {
           val results = predicateScanner.nextRows
           while (results.hasNext) {
             val actualRow = results.next()
-            println(actualRow.getInt(0) + "\t" + actualRow.getInt(1)
-              + "\t" + actualRow.getString(2) + "\t" + actualRow.getString(3)
-              + "\t" + actualRow.getString(4))
+            if (printOutput)
+              println(actualRow.getInt(0) + "\t" + actualRow.getInt(1)
+                + "\t" + actualRow.getString(2) + "\t" + actualRow.getString(3)
+                + "\t" + actualRow.getString(4))
           }
         }
 
@@ -245,7 +255,7 @@ class Database {
     } finally {
       kuduClient.shutdown()
     }
-    println("-- finished")
+    println("<---------------- Finished ---------------->")
   }
 
 }

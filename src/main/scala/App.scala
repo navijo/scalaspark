@@ -17,7 +17,8 @@ object App extends App {
 
   import spark2.implicits._
 
-  val databaseTests = new Database()
+  val databaseTests = new Database(false)
+
 
   doThingsWithDataframes()
   doThingsWithDataSets()
@@ -28,7 +29,7 @@ object App extends App {
   databaseTests.testKuduClient()
 
   def doThingsWithDataSets(): Unit = {
-    System.out.println("\n\nDoing Things with Datasets\n")
+    println("\n\nDoing Things with Datasets")
 
     val dades = Seq("a", "b", "c", "d") zip (0 to 4)
 
@@ -37,12 +38,12 @@ object App extends App {
     val ds2 = ds.map(row => DataRow(row._1, row._2))
     val ds3 = ds2.map(x => (x.name, x.value, x.value + 1))
 
-    System.out.println("DataSet:\t" + ds3.collect().mkString(","))
-    System.out.println("End of datasets things\n")
+    println("DataSet:\t" + ds3.collect().mkString(","))
+    println("End of datasets things")
   }
 
   def doThingsWithDataframes(): Unit = {
-    System.out.println("\n\nDoing Things with DataFrames\n")
+    println("\n\nDoing Things with DataFrames")
 
     val data = Seq("a", "b", "c", "d") zip (0 to 4)
 
@@ -51,12 +52,12 @@ object App extends App {
     val df2 = df.map(row => DataRow(row.getString(0), row.getInt(1)))
     val df3 = df2.map(x => (x.name, x.value, x.value + 1))
 
-    System.out.println("DataFrame:\t" + df3.collect().mkString(","))
-    System.out.println("End of dataframes things\n")
+    println("DataFrame:\t" + df3.collect().mkString(","))
+    println("End of dataframes things")
   }
 
   def doWordCount(): Unit = {
-    System.out.println("\nDoing WordCount")
+    println("\nDoing WordCount")
 
     val conf = com.typesafe.config.ConfigFactory.load()
     val filePath: String = conf.getString("files.path")
@@ -83,10 +84,10 @@ object App extends App {
     val charCount = chars.map((_, 1)).reduceByKey(_ + _).sortByKey(ascending = true)
 
 
-    System.out.println("Total Words: " + tokenized.count() + "\n" + wordCounts.collect().mkString(", "))
-    System.out.println("Total Chars: " + charFromWords + "\n" + charCount.collect().mkString("\n"))
-    System.out.println("Total Chars2: " + charFromWords + "\n" + wordCounts2.mkString("\n"))
-    System.out.println("End of WordCount\n\n")
+    println("Total Words: " + tokenized.count() + "\n" + wordCounts.collect().mkString(", "))
+    println("Total Chars: " + charFromWords + "\n" + charCount.collect().mkString("\n"))
+    println("Total Chars2: " + charFromWords + "\n" + wordCounts2.mkString("\n"))
+    println("End of WordCount\n")
   }
 }
 
